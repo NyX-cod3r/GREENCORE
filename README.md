@@ -32,7 +32,7 @@ Then open <http://localhost:8000/DASHBOARD/dashboard.html> in a browser. The fir
 - `DASHBOARD/dashboard.html`: browser dashboard for the simulation.
 - `DASHBOARD/background.jpg`: dashboard background image.
 - `run_simulation.ps1`: one-command compile and simulation script.
-- `Copy_of_datacenter_power_forecasting.ipynb`: forecasting notebook.
+- `datacenter_power_forecasting.ipynb`: forecasting notebook.
 - `SIH_model_for_power_optimization.ipynb`: additional notebook analysis.
 - `data/server1.csv`, `data/server2.csv`, `data/server3.csv`: deterministic sample data for testing the forecasting notebook.
 - `data/generate_sample_data.py`: recreates the sample data.
@@ -109,7 +109,7 @@ To recreate the sample files:
 python data\generate_sample_data.py
 ```
 
-Then open `Copy_of_datacenter_power_forecasting.ipynb` in VS Code or Jupyter and run its Python cells in order. The notebook cleans and aligns the three files, creates history features, trains twelve forecasting models, compares them with simple baselines, forecasts the final ten days, checks the output format, and writes `predictions.txt` and `predictions_with_timestamps.csv`.
+Then open `datacenter_power_forecasting.ipynb` in VS Code or Jupyter and run its Python cells in order. The notebook cleans and aligns the three files, creates history features, trains twelve forecasting models, compares them with simple baselines, forecasts the final ten days, checks the output format, and writes `predictions.txt` and `predictions_with_timestamps.csv`.
 
 The notebook was tested with the included sample data. Its final forecast contains 14,400 rows, representing ten days at one-minute intervals. For real forecasting, replace the sample files with real server exports using the same column names. The notebook also supports Colab when the files are placed in `/content/drive/MyDrive/SIH`.
 
