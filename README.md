@@ -1,74 +1,132 @@
-# GreenCore Power Optimization System
+# GreenCore: Data-Center Power Optimizer
 
-GreenCore is a deterministic FPGA-style controller for balancing power and thermal load across three data-center servers. The Verilog RTL analyzes predicted load, evaluates thermal and maintenance health, selects a safe receiver, redistributes power, manages reserve capacity, and validates the final allocation.
+GreenCore is a working demonstration of a controller that helps manage power and temperature in a small data center.
 
-This repository contains:
+It watches three servers, named S1, S2, and S3. For each server, it looks at predicted power use, temperature, cooling, and maintenance condition. It can decide whether to move work away from an overloaded server, give a server extra cooling or reserve power, or apply an emergency restriction.
 
-- `rtl/`: controller and safety modules
-- `simulation/system_frame_tb.v`: frame-based Verilog testbench
-- `simulation/system_frames.txt`: input scenarios
-- `simulation/output/system_results.csv`: dashboard-ready simulation output
-- `predictions.txt` and `predictions_with_timestamps.csv`: verified notebook forecast outputs
-- `DASHBOARD/dashboard.html`: browser dashboard for the simulation
-- `Copy_of_datacenter_power_forecasting.ipynb` and `SIH_model_for_power_optimization.ipynb`: notebook experiments and visual analysis
+This project has two related parts:
 
-## Prerequisites
+1. A **Verilog hardware-style controller** that makes the power and safety decisions.
+2. A **Python forecasting notebook** that predicts future server measurements from CSV or Excel data.
 
-- Windows PowerShell
-- Icarus Verilog with both `iverilog` and `vvp` available on `PATH`
-- A browser
-- Python 3 for the local dashboard server
+The dashboard displays the results produced by the Verilog simulation.
 
-The notebooks additionally require their imports to be installed in the selected Python environment. The RTL simulation and dashboard do not require Python packages.
+## Start here
 
-## Run the simulation
+Run these commands from the project folder:
 
-From the repository root:
+```powershell
+.\run_simulation.ps1
+python -m http.server 8000
+```
+
+Then open <http://localhost:8000/DASHBOARD/dashboard.html> in a browser. The first command runs the hardware simulation. The second command starts a small local web server so the dashboard can read the simulation CSV.
+
+## What is included
+
+- `rtl/`: Verilog modules that implement the controller.
+- `rtl/green_core_controller.v`: connects all controller modules together.
+- `simulation/system_frame_tb.v`: testbench that feeds scenarios into the controller.
+- `simulation/system_frames.txt`: the three input scenarios used by the testbench.
+- `simulation/output/system_results.csv`: machine-readable results used by the dashboard.
+- `DASHBOARD/dashboard.html`: browser dashboard for the simulation.
+- `DASHBOARD/background.jpg`: dashboard background image.
+- `run_simulation.ps1`: one-command compile and simulation script.
+- `Copy_of_datacenter_power_forecasting.ipynb`: forecasting notebook.
+- `SIH_model_for_power_optimization.ipynb`: additional notebook analysis.
+- `data/server1.csv`, `data/server2.csv`, `data/server3.csv`: deterministic sample data for testing the forecasting notebook.
+- `data/generate_sample_data.py`: recreates the sample data.
+- `predictions.txt`: forecast values in the required text format.
+- `predictions_with_timestamps.csv`: forecast values with timestamps and actual holdout values.
+- `README_model_explanation.md`: a plain-language explanation of the controller modules.
+
+## Requirements
+
+- Windows PowerShell.
+- Python 3. The notebook uses pandas, NumPy, matplotlib, scikit-learn, XGBoost, python-dateutil, and openpyxl.
+- Icarus Verilog, which provides the `iverilog` and `vvp` commands.
+- A web browser.
+- Internet access when opening the dashboard, because Chart.js and Three.js are loaded from public CDNs.
+
+The RTL simulation itself does not need Python packages. The dashboard does not need a Python package, but it must be served over HTTP.
+
+## Run the Verilog simulation
+
+From the project folder:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 .\run_simulation.ps1
 ```
 
-The command compiles every Verilog file in `rtl/`, runs the testbench, and regenerates:
+The script finds every `.v` file in `rtl/`, compiles them with Icarus Verilog, runs the testbench, and writes results to `simulation/output/`.
 
-- `simulation/output/system_results.csv`
-- `simulation/output/system_run.vcd`
+The simulation creates or updates:
 
-The compiled `simulation/output/sih_model.vvp` file is also regenerated locally. Build and waveform artifacts are ignored by Git.
+- `system_results.csv`: one row for each scenario.
+- `system_run.vcd`: waveform data for a waveform viewer.
+- `sih_model.vvp`: the compiled simulation file.
 
-If the command reports that `iverilog` or `vvp` is missing, install Icarus Verilog and reopen PowerShell so the updated `PATH` is loaded.
+The checked-in scenarios currently produce three frames at 22 ns, 32 ns, and 42 ns. All three frames pass the controller safety gate. The second frame demonstrates a 120 W transfer from S1 to S2. The third frame demonstrates a high-temperature S1 condition where transfer is disabled.
+
+If PowerShell says that `iverilog` or `vvp` cannot be found, install Icarus Verilog and reopen PowerShell or VS Code so the updated `PATH` is loaded.
 
 ## Run the dashboard
 
-The dashboard fetches the generated CSV, so serve the repository over HTTP rather than opening the HTML file directly:
+Do not open the HTML file directly from File Explorer. The browser may block its CSV request. Start the local server instead:
 
 ```powershell
 python -m http.server 8000
 ```
 
-Open <http://localhost:8000/DASHBOARD/dashboard.html> in a browser. Use the frame selector, `Next`, and `Play frames` controls to inspect the controller decisions. The dashboard uses Chart.js and Three.js from their public CDNs, so an internet connection is needed for charts and the 3D view.
+Open <http://localhost:8000/DASHBOARD/dashboard.html>.
 
-## Current simulation
+The dashboard provides a frame selector, `Next` and `Play frames` controls, predicted load, reserve charge, redistribution details, safety status, temperature and power charts, and a visual three-server controller map.
 
-The checked-in CSV contains three scenarios at 22 ns, 32 ns, and 42 ns. The current scenarios produce valid safety gates in every frame. The 32 ns frame demonstrates a 120 W redistribution from S1 to S2; the 42 ns frame demonstrates a high-temperature S1 condition with transfer disabled.
+The dashboard reads `simulation/output/system_results.csv`. If the CSV cannot be loaded, it shows built-in demonstration frames.
 
-## Notebook analysis
+## Run the forecasting notebook
 
-Open either notebook in VS Code or Jupyter after selecting a Python environment with the packages imported by that notebook. `Copy_of_datacenter_power_forecasting.ipynb` expects three source files in `data/`:
+The main notebook expects three files in the `data/` folder:
 
 - `server1.csv` or `server1.xlsx`
 - `server2.csv` or `server2.xlsx`
 - `server3.csv` or `server3.xlsx`
 
-Each file must contain `ts`, `cooling_kw`, `hvac_kw`, `it_power_kw`, and `pump_kw` columns. The notebook also works in Colab when those files are placed in `/content/drive/MyDrive/SIH`. The repository includes synthetic smoke-test inputs; replace them with real server exports for operational forecasting.
+Every input file must contain these columns:
 
-For a reproducible local smoke test, the repository includes deterministic synthetic inputs in `data/server1.csv`, `data/server2.csv`, and `data/server3.csv`. Regenerate them with:
+- `ts`: timestamp
+- `cooling_kw`: cooling power in kilowatts
+- `hvac_kw`: HVAC power in kilowatts
+- `it_power_kw`: server IT power in kilowatts
+- `pump_kw`: pump power in kilowatts
+
+The sample files in this repository are synthetic. They are useful for checking that the notebook works, but they are not real data-center measurements.
+
+To recreate the sample files:
 
 ```powershell
 python data\generate_sample_data.py
 ```
 
-These sample files are for validation only and do not represent real data-center measurements. Replace them with the real server exports for meaningful forecasting.
+Then open `Copy_of_datacenter_power_forecasting.ipynb` in VS Code or Jupyter and run its Python cells in order. The notebook cleans and aligns the three files, creates history features, trains twelve forecasting models, compares them with simple baselines, forecasts the final ten days, checks the output format, and writes `predictions.txt` and `predictions_with_timestamps.csv`.
 
-The notebooks are analysis surfaces; the Verilog testbench is the source of truth for the generated controller behavior shown in the dashboard.
+The notebook was tested with the included sample data. Its final forecast contains 14,400 rows, representing ten days at one-minute intervals. For real forecasting, replace the sample files with real server exports using the same column names. The notebook also supports Colab when the files are placed in `/content/drive/MyDrive/SIH`.
+
+## Important terms
+
+- **RTL**: code that describes digital hardware behavior.
+- **Testbench**: a program that feeds test inputs into the hardware design and records results.
+- **Simulation frame**: one test scenario at one simulated time.
+- **Predicted power**: the expected power value used by the controller.
+- **Reserve power**: backup capacity used when normal capacity is not enough.
+- **Redistribution**: moving requested workload or power from one server to another.
+- **Safety gate**: the final yes/no check that controller rules passed.
+- **CSV**: a text file where values are separated by commas.
+- **VCD**: a waveform file used to inspect signal changes over simulation time.
+
+## Scope and limitations
+
+This repository is a tested simulation and demonstration, not a direct connection to live server hardware. The included sample forecast data is synthetic. Real deployment would require live sensor inputs, a hardware integration layer, operational limits approved by the data-center team, and additional safety testing.
+
+The forecasting notebook and the Verilog controller are connected conceptually, but the notebook does not automatically convert forecast output into `simulation/system_frames.txt`. That conversion is currently a manual project boundary.

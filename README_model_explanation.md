@@ -1,335 +1,132 @@
-# Power Optimization Model Explanation
+# GreenCore Explained in Simple Words
 
-## 1. What this project is doing
+This document explains the GreenCore controller for readers who are new to data centers, Verilog, and hardware simulation.
 
-This notebook builds a rule-based digital control system for power and thermal management across three servers: S1, S2, and S3. It does not use a trained machine learning model. Instead, it uses fixed logic written in Verilog to estimate power, detect overloads, choose where to shift workload, trigger cooling, and check whether the overall system is safe.
+## What problem does GreenCore solve?
 
-The system is designed to:
+A data center contains many servers. Servers use electricity and create heat. If one server uses too much power or becomes too hot, the system needs to react quickly.
 
-- predict total power usage for each server,
-- classify whether a server is in a safe, warning, or critical state,
-- decide whether one server should receive load from another,
-- trigger reserve cooling or reserve power if needed,
-- validate that the final decision is safe.
+GreenCore is a rule-based controller that watches three servers: S1, S2, and S3. It checks their expected power and temperature, decides what action is needed, and checks whether that action is safe.
 
----
+The controller can add power values, identify dangerous conditions, choose a healthy receiver, move a limited amount of requested load, request reserve power or cooling, reduce power in an emergency, and report whether the final decision passed the safety rules.
 
-## 2. Why this is called a “model”
+## Is this machine learning?
 
-In this notebook, the word “model” is being used in a hardware/control-system sense, not a machine learning sense.
+The Verilog controller is **not** machine learning. It uses fixed rules and limits. The same inputs always produce the same decisions.
 
-This is a model of the control logic for a power management system. It simulates how the system would behave under different power and temperature conditions.
+The project also contains a separate Python forecasting notebook. That notebook uses XGBoost models to predict future power measurements from historical data. Those predictions can be studied alongside the hardware-style controller, but the notebook does not automatically rewrite the Verilog testbench input file.
 
-It is not a statistical model trained on data. Instead, it is a logic model with thresholds and conditions.
+## How one decision works
 
----
+For every server, the controller follows this flow:
 
-## 3. Main idea of the system
+1. **Analyze power.** Add IT, cooling, HVAC, and pump power.
+2. **Check health.** Look at temperature, cooling behavior, and maintenance risk.
+3. **Find a receiver.** Choose a healthy server with enough spare capacity.
+4. **Balance power.** Move a limited amount from the overloaded server when possible.
+5. **Use reserve capacity.** Provide backup power or cooling when requested.
+6. **Limit the action.** Use ramp steps and maximum limits so changes are not too sudden or too large.
+7. **Validate safety.** Return `final_valid=1` only when the safety checks pass.
 
-Each server receives predicted values for:
+## The controller modules
 
-- IT power
-- cooling power
-- HVAC power
-- pump power
-- temperature
-- maintenance risk
+### 1. `load_analyzer`
 
-The system then combines these values and takes decisions such as:
+This first module adds four predicted values:
 
-- which server is overloaded,
-- which server is safe enough to receive extra workload,
-- whether to increase cooling,
-- whether to enforce emergency power restriction,
-- whether the final allocation is valid.
+```text
+total power = IT power + cooling power + HVAC power + pump power
+```
 
----
+It then puts the total into a power zone:
 
-## 4. Module-by-module explanation
+- **Emergency:** below 300 W.
+- **Buffer:** 300 to below 400 W.
+- **Low:** 400 to below 550 W.
+- **Medium:** 550 to below 750 W.
+- **High:** 750 to below 850 W.
+- **Critical:** 850 W or more.
 
-### 4.1 load_analyzer
+It also reports whether reserve power or extra cooling should be requested.
 
-This module computes:
+### 2. `health_maintenance`
 
-- total predicted power = IT + cooling + HVAC + pump
-- power zone for each server
-- whether the server is in a high-power state
-- whether reserve trigger should happen
-- whether cooling boost should happen
+This module asks whether a server is healthy enough to keep its work or receive more work. It checks predicted temperature, cooling and HVAC power, reserve cooling, and maintenance risk.
 
-The total power is then classified into these zones:
+Temperature states are:
 
-- emergency: < 300
-- buffer: < 400
-- low: < 550
-- medium: < 750
-- high: < 850
-- critical: >= 850
+- **Safe:** below 70 C.
+- **Warning:** 70 C to below 85 C.
+- **Critical:** 85 C or higher.
 
-Example logic:
+A server is not eligible when it is critically hot, has a serious maintenance risk, or appears to have insufficient cooling.
 
-- if power is above 750, the server is considered medium/high
-- if it reaches critical state, special action is triggered
+### 3. `priority_eligibility`
 
-The outputs include:
+This module finds possible receiver servers. A receiver must be healthy, cool enough, and below its allowed power level.
 
-- `predicted_power_total`
-- `predicted_zone`
-- `predicted_high_power`
-- `reserve_trigger`
-- `cooling_boost`
+The `mode_select` input chooses whether to prefer the server with the most spare capacity, the coolest eligible server, or a fixed priority order.
 
-This acts like the first layer of diagnosis.
+### 4. `redistribution_manager`
 
----
+This module decides whether work should move. It chooses the most serious source server, chooses the receiver selected by the priority module, and calculates a transfer amount. The transfer cannot push the receiver above its target or reduce the source below its safety floor.
 
-### 4.2 health_maintenance
+If no safe receiver exists, the controller requests emergency power restriction instead of making an unsafe transfer.
 
-This module checks thermal health and maintenance health.
+### 5. `reserve_power_supply`
 
-It considers:
+This module manages backup capacity. It can provide small, controlled reserve injections to a server or to cooling. It reduces the reserve charge when capacity is used and keeps the charge within its maximum of 10,000 W.
 
-- predicted temperature
-- current cooling capacity
-- reserve cooling boost
-- maintenance risk
+### 6. `power_allocation_engine`
 
-It calculates:
+This module applies the decision over time. It uses a 15 W ramp step so an allocation does not jump suddenly. It limits a server allocation to 1,000 W and calculates extra cooling when needed.
 
-- effective temperature after reserve cooling
-- thermal status (safe / warning / critical)
-- if a server is thermally safe
-- if thermal redistribution is needed
-- if cooling is malfunctioning
-- if maintenance is okay
-- if the server is eligible to remain healthy
+### 7. `safety_check`
 
-A server is marked unsafe if:
+This final check verifies that each allocation is at or below 1,000 W, reserve charge is within its limit, reserve injections match their triggers, redistribution has different source and receiver servers, and emergency restriction includes full cooling.
 
-- temperature is too high,
-- maintenance is severe,
-- cooling is predicted to malfunction.
+The output `final_valid` is the overall result. A value of `1` means these checks passed. A value of `0` means at least one check failed.
 
-This is a safety gate before power redistribution is allowed.
+### 8. `green_core_controller`
 
----
+This is the top-level module. It connects the other modules in this order:
 
-### 4.3 reserve_power_supply
+```text
+load analysis -> health check -> receiver choice -> redistribution -> reserve power -> allocation -> safety check
+```
 
-This module manages reserve energy and cooling backup.
+## What is Verilog?
 
-It keeps a reserve charge level and decides how much to inject into servers or cooling support.
+Verilog is a language for describing digital hardware. Normal software usually runs one instruction after another. Verilog describes signals, hardware blocks, and clocked changes.
 
-Key logic:
+In this project, `wire` values carry calculated signals, `reg` values hold clocked values, `always @(*)` describes logic that reacts to inputs, and `always @(posedge clk ...)` describes clocked behavior.
 
-- if a server triggers reserve mode, it may receive a ramped injection,
-- if cooling is required, reserve cooling also gets assigned,
-- reserve charge is limited by a maximum value,
-- emergency restrictions can reduce charging if needed.
+Icarus Verilog compiles and runs this design on a normal computer. This is a simulation; it is not the same as programming a physical FPGA.
 
-This is important because the system must not overuse reserve capacity.
+## What the current simulation shows
 
----
+The testbench runs three example frames:
 
-### 4.4 priority_eligibility
+- **Frame 0:** normal, low-power conditions.
+- **Frame 1:** S1 is critical, so 120 W is transferred from S1 to S2 and extra cooling is requested.
+- **Frame 2:** S1 is critically hot, so the controller does not make the unsafe transfer and requests cooling support.
 
-This decides which server is the best target to receive redistributed load.
+The current checked-in simulation produces three safety-valid frames. The dashboard reads `simulation/output/system_results.csv` and lets a user inspect each frame.
 
-A server becomes eligible only if:
+## What the forecasting notebook does
 
-- its predicted power is below a limit,
-- its temperature is below a threshold,
-- it is health-eligible.
+The notebook reads one file per server with these columns: `ts`, `cooling_kw`, `hvac_kw`, `it_power_kw`, and `pump_kw`.
 
-Then, depending on `mode_select`, it chooses the best receiver according to different policies:
+It aligns all three files to one-minute timestamps, creates time and history features, trains twelve forecasting models, compares them with simple baselines, forecasts ten days, and checks the output format.
 
-- maximum headroom
-- coolest eligible server
-- fixed priority order
+The sample data can be regenerated with:
 
-So the system can choose the most suitable server for balancing power.
+```powershell
+python data\generate_sample_data.py
+```
 
----
+The forecast output is written to `predictions.txt` and `predictions_with_timestamps.csv`. These sample inputs are synthetic, so real data should be used for any operational conclusion.
 
-### 4.5 redistribution_manager
+## Short summary
 
-This module decides:
-
-- which server is the source of overloaded power,
-- which server is the receiver,
-- whether redistribution should happen,
-- how much power should be moved,
-- when emergency restriction is needed,
-- whether cooling boost is required.
-
-It looks at several signals:
-
-- predicted power,
-- predicted temperature,
-- `pred_high` state,
-- thermal redistribution trigger,
-- chosen receiver.
-
-The logic is designed so that:
-
-- overloaded servers are reduced,
-- underloaded but healthy servers gain load,
-- power is not shifted if the receiver is unsafe,
-- emergency restriction occurs when there is no safe receiver.
-
----
-
-### 4.6 power_allocation_engine
-
-This is the actuation stage.
-
-It updates each server’s allocated power and cooling.
-
-It applies:
-
-- source reduction from the overloaded server,
-- receiver increase for the underloaded server,
-- a ramp step to avoid abrupt jumps,
-- maximum clamp at 1000 W,
-- extra cooling calculation when needed.
-
-This makes the controller smoother and more stable.
-
----
-
-### 4.7 safety_check
-
-This is the final validation layer.
-
-It checks whether:
-
-- each server allocation is under the maximum,
-- reserve charge is within safe bounds,
-- reserve injections are consistent with triggers,
-- redistribution is valid,
-- emergency restrictions are consistent.
-
-The final output `final_valid` tells whether the proposed operation is safe.
-
----
-
-### 4.8 green_core_controller
-
-This is the top-level controller that connects all modules together.
-
-It orchestrates:
-
-- prediction,
-- thermal health evaluation,
-- priority selection,
-- redistribution,
-- reserve power,
-- allocation,
-- safety validation.
-
-This is the central brain of the system.
-
----
-
-## 5. What the whole system is trying to optimize
-
-The controller is trying to maintain three main goals:
-
-1. Keep each server below its safe power limit.
-2. Keep temperatures from becoming dangerous.
-3. Avoid failure from overload, cooling issues, or maintenance problems.
-
-It does this by balancing power across servers and reserve resources.
-
----
-
-## 6. Simple real-world analogy
-
-Think of this system like a smart data-center power manager:
-
-- Some servers are too hot or overloaded.
-- Some other servers are cooler and healthy.
-- The system shifts jobs or power from the hot server to the cool one.
-- If things get too serious, it triggers emergency limits and cooling support.
-- It always checks whether the action is safe before doing it.
-
-That is exactly what the logic is modeling.
-
----
-
-## 7. What is Verilog?
-
-Verilog is a Hardware Description Language (HDL). It is used to model and design digital circuits.
-
-Instead of writing normal software logic, Verilog describes how signals and hardware blocks behave over time.
-
-It is commonly used for:
-
-- digital system design,
-- FPGA development,
-- ASIC design,
-- embedded hardware simulation,
-- hardware verification.
-
-### What Verilog does
-
-Verilog lets you describe:
-
-- inputs and outputs,
-- registers and wires,
-- combinational logic,
-- sequential logic,
-- state machines,
-- timing behavior,
-- testbench simulation.
-
-In this project, Verilog is used to model a digital control system that reacts to values like predicted power and temperature.
-
-### Why it is useful here
-
-This notebook simulates the control logic at the hardware level. That means the system can be checked as a digital controller, not only as pseudocode or Python logic.
-
-It is especially helpful when designing:
-
-- FPGA implementations,
-- hardware safety logic,
-- embedded power management solutions,
-- real-time systems with strict constraints.
-
----
-
-## 8. Summary
-
-This notebook is a hardware-style power optimization and thermal safety controller for three servers.
-
-It contains:
-
-- power prediction,
-- thermal assessment,
-- maintenance assessment,
-- selection of source and receiver servers,
-- redistribution logic,
-- reserve power logic,
-- final safety validation.
-
-It is not a machine learning model but a deterministic expert controller implemented in Verilog.
-
----
-
-## 9. One-line summary
-
-This project models a smart power-balancing and safety system for a multi-server environment, using fixed logic rules in Verilog to predict load, redistribute power, trigger cooling, and maintain safe operation.
-
----
-
-## 10. Project structure
-
-- `SIH_model_for_power_optimization.ipynb` - Builds the Verilog source files, installs the Python dependency, compiles the design, and runs the simulation.
-- `rtl/` - Verilog design modules for load analysis, health maintenance, allocation, redistribution, reserve power, safety checks, and the top-level controller.
-- `simulation/system_frame_tb.v` - Testbench that reads input frames, drives the controller, and writes simulation output.
-- `simulation/system_frames.txt` - Input test frames containing current values, predicted values, temperatures, maintenance levels, and selection modes.
-- `simulation/output/system_results.csv` - Machine-readable results produced by the simulation for analysis or plotting.
-- `simulation/output/system_run.vcd` - Waveform dump produced by the simulation for viewing signal changes over time.
-- `simulation/output/sih_model.vvp` - Compiled Icarus Verilog simulation executable.
-- `DASHBOARD/dashboard.html` - Local dashboard that visualizes the generated CSV results.
-- `DASHBOARD/background.jpg` - Dashboard background image.
+GreenCore is a deterministic, hardware-style controller for three data-center servers. It analyzes predicted power, checks temperature and maintenance health, balances load when safe, uses backup capacity when necessary, and reports whether the final action passed its safety checks. A separate Python notebook provides future power forecasts that can be used as an input source after the project's current manual conversion step.
