@@ -29,6 +29,16 @@ module power_allocation_engine (
     reg [15:0] s1_target, s2_target, s3_target;
     reg s1_is_restriction, s2_is_restriction, s3_is_restriction;
 
+    function [15:0] saturating_add;
+        input [15:0] base_value;
+        input [15:0] increment;
+        reg [16:0] total;
+        begin
+            total = {1'b0, base_value} + {1'b0, increment};
+            saturating_add = (total > {1'b0, MAX_POWER}) ? MAX_POWER : total[15:0];
+        end
+    endfunction
+
     always @(*) begin
         s1_target = s1_pred_power;
         s2_target = s2_pred_power;
@@ -40,32 +50,32 @@ module power_allocation_engine (
         if (source_server == S1 && redistribution_enable)
             s1_target = (redistribution_amount >= s1_pred_power) ? 16'd0 : (s1_pred_power - redistribution_amount);
         else if (receiver_server == S1 && redistribution_enable)
-            s1_target = s1_pred_power + redistribution_amount;
+            s1_target = saturating_add(s1_pred_power, redistribution_amount);
         else if (source_server == S1 && emergency_power_restriction_trigger) begin
             s1_target = (s1_pred_power > RESTRICTION_TARGET) ? RESTRICTION_TARGET : s1_pred_power;
             s1_is_restriction = (s1_pred_power > RESTRICTION_TARGET);
         end else if (s1_reserve_trigger)
-            s1_target = s1_pred_power + s1_reserve_injection;
+            s1_target = saturating_add(s1_pred_power, s1_reserve_injection);
 
         if (source_server == S2 && redistribution_enable)
             s2_target = (redistribution_amount >= s2_pred_power) ? 16'd0 : (s2_pred_power - redistribution_amount);
         else if (receiver_server == S2 && redistribution_enable)
-            s2_target = s2_pred_power + redistribution_amount;
+            s2_target = saturating_add(s2_pred_power, redistribution_amount);
         else if (source_server == S2 && emergency_power_restriction_trigger) begin
             s2_target = (s2_pred_power > RESTRICTION_TARGET) ? RESTRICTION_TARGET : s2_pred_power;
             s2_is_restriction = (s2_pred_power > RESTRICTION_TARGET);
         end else if (s2_reserve_trigger)
-            s2_target = s2_pred_power + s2_reserve_injection;
+            s2_target = saturating_add(s2_pred_power, s2_reserve_injection);
 
         if (source_server == S3 && redistribution_enable)
             s3_target = (redistribution_amount >= s3_pred_power) ? 16'd0 : (s3_pred_power - redistribution_amount);
         else if (receiver_server == S3 && redistribution_enable)
-            s3_target = s3_pred_power + redistribution_amount;
+            s3_target = saturating_add(s3_pred_power, redistribution_amount);
         else if (source_server == S3 && emergency_power_restriction_trigger) begin
             s3_target = (s3_pred_power > RESTRICTION_TARGET) ? RESTRICTION_TARGET : s3_pred_power;
             s3_is_restriction = (s3_pred_power > RESTRICTION_TARGET);
         end else if (s3_reserve_trigger)
-            s3_target = s3_pred_power + s3_reserve_injection;
+            s3_target = saturating_add(s3_pred_power, s3_reserve_injection);
 
         // Clamp all targets to the project maximum.
         if (s1_target > MAX_POWER) s1_target = MAX_POWER;

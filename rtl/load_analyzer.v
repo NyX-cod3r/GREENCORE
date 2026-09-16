@@ -18,12 +18,22 @@ localparam [2:0] ZONE_MEDIUM    = 3'b011;
 localparam [2:0] ZONE_HIGH      = 3'b100;
 localparam [2:0] ZONE_CRITICAL  = 3'b101;
 
-// 1000 W = 100% normalized capacity.
-assign predicted_power_total =
-    pred_it_power +
-    pred_cooling_power +
-    pred_hvac_power +
-    pred_pump_power;
+// Use a wider intermediate so large inputs saturate instead of wrapping.
+function [15:0] saturating_total;
+    input [15:0] it_power;
+    input [15:0] cooling_power;
+    input [15:0] hvac_power;
+    input [15:0] pump_power;
+    reg [17:0] total;
+    begin
+        total = {2'b0, it_power} + {2'b0, cooling_power} +
+                {2'b0, hvac_power} + {2'b0, pump_power};
+        saturating_total = (total > 18'd65535) ? 16'hffff : total[15:0];
+    end
+endfunction
+
+assign predicted_power_total = saturating_total(
+    pred_it_power, pred_cooling_power, pred_hvac_power, pred_pump_power);
 
 function [2:0] classify;
     input [15:0] p;

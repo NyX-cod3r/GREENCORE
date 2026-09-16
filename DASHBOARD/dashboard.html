@@ -181,7 +181,7 @@
   <main class="shell">
     <nav class="topbar">
       <div class="brand"><div class="brand-mark"><span class="fpga-chip" aria-label="AI FPGA chip">AI</span></div><div><div class="brand-name">GreenCore</div><div class="eyebrow">AI-FPGA data center optimizer</div></div></div>
-      <div class="top-actions"><button class="button" id="playBtn">Play frames</button></div>
+      <div class="top-actions"><span class="live" id="dataStatus"><i class="live-dot"></i>Demo fallback</span><button class="button" id="playBtn">Play frames</button></div>
     </nav>
 
     <section class="hero">
@@ -227,7 +227,9 @@
     let rows = fallback, selected = 0, playing = false, timer;
     const colors = ['#f1b866','#b8d58f','#ed846d'];
     const parse = text => { const [head,...body] = text.trim().split(/\r?\n/); const keys = head.split(','); return body.map(line => Object.fromEntries(line.split(',').map((v,i)=>[keys[i], Number.isNaN(Number(v)) ? v : Number(v)]))); };
-    fetch('../simulation/output/system_results.csv').then(r => r.ok ? r.text() : Promise.reject()).then(text => { const data = parse(text); if (data.length) { rows = data; buildSelector(); render(); } }).catch(() => {});
+    const requiredFields = ['frame','time','current_s1','pred_s1','current_s2','pred_s2','current_s3','pred_s3','alloc_s1','alloc_s2','alloc_s3','source','receiver','redist_enable','redist_amount','pred_temp_s1','pred_temp_s2','pred_temp_s3','eff_temp_s1','eff_temp_s2','eff_temp_s3','reserve_charge','final_valid'];
+    function setDataStatus(text, live) { const status = document.getElementById('dataStatus'); status.innerHTML = `<i class="live-dot"></i>${text}`; status.style.color = live ? 'var(--lime)' : 'var(--coral)'; }
+    fetch('../simulation/output/system_results.csv').then(r => r.ok ? r.text() : Promise.reject(new Error(`CSV request failed (${r.status})`))).then(text => { const data = parse(text); if (!data.length || requiredFields.some(field => !(field in data[0]))) throw new Error('Simulation CSV is missing required fields'); rows = data; selected = 0; setDataStatus('Simulation CSV', true); buildSelector(); syncCharts(); render(); }).catch(error => { setDataStatus('Demo fallback · CSV unavailable', false); console.warn(error); });
     const chartDefaults = {responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{color:'#8d9bb5',font:{family:'DM Mono',size:10},boxWidth:10}}}, scales:{x:{grid:{color:'rgba(150,174,215,.08)'},ticks:{color:'#8d9bb5',font:{family:'DM Mono',size:10}}},y:{grid:{color:'rgba(150,174,215,.08)'},ticks:{color:'#8d9bb5',font:{family:'DM Mono',size:10}}}}};
     let powerChart, tempChart, reserveChart;
     let coreScene, coreCamera, coreRenderer, coreGroup, coreNodes = [], coreBeam, coreArrow, coreParticles = [], coreLinks, coreFrame = 0, transferStart, transferEnd, flowSource, flowReceiver;
@@ -300,6 +302,19 @@
       powerChart = chart('powerChart',{type:'line',data:{labels:rows.map(r=>'F'+r.frame),datasets:[...['s1','s2','s3'].map((s,i)=>({label:s.toUpperCase()+' predicted',data:rows.map(r=>r['pred_'+s]),borderColor:colors[i],backgroundColor:colors[i]+'22',tension:.35,pointRadius:3,fill:false})),...['s1','s2','s3'].map((s,i)=>({label:s.toUpperCase()+' current',data:rows.map(r=>r['current_'+s]),borderColor:colors[i]+'88',borderDash:[4,4],tension:.35,pointRadius:2,fill:false}))]},options:chartDefaults});
       tempChart = chart('tempChart',{type:'bar',data:{labels:['S1','S2','S3'],datasets:[{label:'Predicted',data:[],backgroundColor:'#ff8b7888',borderRadius:4},{label:'Effective',data:[],backgroundColor:'#a895ffcc',borderRadius:4}]},options:{...chartDefaults,scales:{...chartDefaults.scales,y:{...chartDefaults.scales.y,suggestedMax:100}}}});
       reserveChart = chart('reserveChart',{type:'line',data:{labels:rows.map(r=>'F'+r.frame),datasets:[{label:'Reserve charge',data:rows.map(r=>r.reserve_charge),borderColor:'#b8e36b',backgroundColor:'#b8e36b22',fill:true,tension:.35,pointRadius:3}]},options:chartDefaults});
+    }
+    function syncCharts() {
+      if (!powerChart || !reserveChart) return;
+      powerChart.data.labels = rows.map(r => `F${r.frame}`);
+      powerChart.data.datasets.forEach(dataset => {
+        const server = dataset.label.slice(0, 2).toLowerCase();
+        const current = dataset.label.endsWith('current');
+        dataset.data = rows.map(r => r[`${current ? 'current' : 'pred'}_${server}`]);
+      });
+      reserveChart.data.labels = rows.map(r => `F${r.frame}`);
+      reserveChart.data.datasets[0].data = rows.map(r => r.reserve_charge);
+      powerChart.update();
+      reserveChart.update();
     }
     function buildSelector() { const trigger = document.getElementById('frameSelect'), menu = document.getElementById('frameMenu'); trigger.querySelector('span').textContent = `F${rows[selected].frame} · ${rows[selected].time}ns`; menu.innerHTML = rows.map((r,i)=>`<button class="frame-option" type="button" role="option" aria-selected="${i === selected}" data-index="${i}">Frame ${r.frame} · ${r.time} ns</button>`).join(''); }
     function positionFrameMenu() { const trigger=document.getElementById('frameSelect'), menu=document.getElementById('frameMenu'), rect=trigger.getBoundingClientRect(); menu.style.left=`${rect.left}px`; menu.style.top=`${rect.bottom + 8}px`; menu.style.width=`${rect.width}px`; }
