@@ -62,4 +62,12 @@ Open either notebook in VS Code or Jupyter after selecting a Python environment 
 
 Each file must contain `ts`, `cooling_kw`, `hvac_kw`, `it_power_kw`, and `pump_kw` columns. The notebook also works in Colab when those files are placed in `/content/drive/MyDrive/SIH`. The repository currently does not include these private source datasets, so the forecasting notebook cannot complete until they are supplied. Its loader now reports this requirement directly.
 
+For a reproducible local smoke test, the repository includes deterministic synthetic inputs in `data/server1.csv`, `data/server2.csv`, and `data/server3.csv`. Regenerate them with:
+
+```powershell
+python data\generate_sample_data.py
+```
+
+These sample files are for validation only and do not represent real data-center measurements. Replace them with the real server exports for meaningful forecasting.
+
 The notebooks are analysis surfaces; the Verilog testbench is the source of truth for the generated controller behavior shown in the dashboard.
