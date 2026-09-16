@@ -8,6 +8,7 @@ This repository contains:
 - `simulation/system_frame_tb.v`: frame-based Verilog testbench
 - `simulation/system_frames.txt`: input scenarios
 - `simulation/output/system_results.csv`: dashboard-ready simulation output
+- `predictions.txt` and `predictions_with_timestamps.csv`: verified notebook forecast outputs
 - `DASHBOARD/dashboard.html`: browser dashboard for the simulation
 - `Copy_of_datacenter_power_forecasting.ipynb` and `SIH_model_for_power_optimization.ipynb`: notebook experiments and visual analysis
 
@@ -60,7 +61,7 @@ Open either notebook in VS Code or Jupyter after selecting a Python environment 
 - `server2.csv` or `server2.xlsx`
 - `server3.csv` or `server3.xlsx`
 
-Each file must contain `ts`, `cooling_kw`, `hvac_kw`, `it_power_kw`, and `pump_kw` columns. The notebook also works in Colab when those files are placed in `/content/drive/MyDrive/SIH`. The repository currently does not include these private source datasets, so the forecasting notebook cannot complete until they are supplied. Its loader now reports this requirement directly.
+Each file must contain `ts`, `cooling_kw`, `hvac_kw`, `it_power_kw`, and `pump_kw` columns. The notebook also works in Colab when those files are placed in `/content/drive/MyDrive/SIH`. The repository includes synthetic smoke-test inputs; replace them with real server exports for operational forecasting.
 
 For a reproducible local smoke test, the repository includes deterministic synthetic inputs in `data/server1.csv`, `data/server2.csv`, and `data/server3.csv`. Regenerate them with:
 
