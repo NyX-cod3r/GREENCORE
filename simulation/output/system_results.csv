@@ -1,0 +1,4 @@
+frame,time,current_s1,pred_s1,current_s2,pred_s2,current_s3,pred_s3,alloc_s1,alloc_s2,alloc_s3,source,receiver,redist_enable,redist_amount,pred_temp_s1,pred_temp_s2,pred_temp_s3,eff_temp_s1,eff_temp_s2,eff_temp_s3,reserve_charge,final_valid
+0,22,150,160,260,270,370,380,15,15,15,0,1,0,0,45,44,46,45,44,46,9970,1
+1,32,790,870,260,270,320,330,30,30,30,1,2,1,120,76,55,58,76,55,58,9940,1
+2,42,675,705,350,360,210,220,45,45,45,1,3,0,0,90,80,62,90,80,62,9910,1

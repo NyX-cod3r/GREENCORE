@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GreenCore | AI-FPGA Data Center Optimizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <style>
+    :root {
+      --ink: #f7f1e7;
+      --muted: #aaa398;
+      --panel: rgba(38, 35, 30, .84);
+      --line: rgba(226, 205, 169, .17);
+      --cyan: #f1b866;
+      --lime: #b8d58f;
+      --coral: #ed846d;
+      --violet: #d7b5a0;
+      --bg: #171715;
+      --glass-fill: linear-gradient(135deg, rgba(255,248,231,.13), rgba(241,184,102,.08) 48%, rgba(23,23,21,.62));
+      --glass-blur: 16px;
+      --ease-spring: cubic-bezier(.16, 1, .3, 1);
+    }
+    * { box-sizing: border-box; }
+    body {
+      position: relative;
+      isolation: isolate;
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      font-family: "Space Grotesk", sans-serif;
+      min-height: 100vh;
+      background: var(--bg);
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      z-index: -2;
+      inset: 0;
+      width: 1097px;
+      height: 617px;
+      background: url("background.jpg") no-repeat 0 0;
+      background-size: 1097px 617px;
+      pointer-events: none;
+    }
+    body::after {
+      content: "";
+      position: fixed;
+      z-index: -1;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(11,13,14,.46), rgba(11,13,14,.8)), radial-gradient(circle at 50% 0%, rgba(241,184,102,.08), transparent 46rem);
+      pointer-events: none;
+    }
+    .shell { width: min(1440px, calc(100% - 48px)); margin: 0 auto; padding: 30px 0 48px; }
+    .topbar, .hero, .section-head, .metric-grid, .charts, .bottom-grid { display: flex; }
+    .topbar { justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 52px; }
+    .brand { display: flex; align-items: center; gap: 13px; }
+    .brand-mark { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid rgba(241,184,102,.62); color: var(--cyan); transform: rotate(45deg); border-radius: 9px; }
+    .brand-mark .fpga-chip { position: relative; width: 20px; height: 20px; display: grid; place-items: center; transform: rotate(-45deg); border: 1.5px solid currentColor; border-radius: 3px; color: var(--cyan); font: 700 7px "DM Mono", monospace; letter-spacing: 0; }
+    .brand-mark .fpga-chip::before { content: ""; position: absolute; inset: 4px; border: 1px solid currentColor; border-radius: 1px; opacity: .72; }
+    .brand-mark .fpga-chip::after { content: ""; position: absolute; width: 4px; height: 4px; top: -4px; left: 6px; border-top: 1px solid currentColor; border-bottom: 1px solid currentColor; box-shadow: 0 20px 0 -1px currentColor, 0 0 0 0 currentColor, 10px 0 0 -1px currentColor, 10px 20px 0 -1px currentColor; opacity: .9; }
+    .brand-name { font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 14px; }
+    .eyebrow { color: var(--cyan); font: 500 11px "DM Mono", monospace; letter-spacing: .14em; text-transform: uppercase; }
+    .top-actions { display: flex; align-items: center; gap: 12px; }
+    .live { display: flex; align-items: center; gap: 8px; color: var(--lime); font: 500 12px "DM Mono", monospace; text-transform: uppercase; letter-spacing: .08em; }
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 14px var(--lime); }
+    .button, select { color: var(--ink); background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; padding: 10px 13px; font: 500 12px "DM Mono", monospace; cursor: pointer; }
+    .button:hover, .button:focus-visible { border-color: var(--cyan); color: var(--ink); background: rgba(241,184,102,.18); text-shadow: 0 1px 8px rgba(0,0,0,.45); outline: none; }
+    .hero { position: relative; z-index: 100; justify-content: space-between; align-items: flex-end; gap: 40px; margin-bottom: 30px; }
+    h1 { max-width: 700px; margin: 10px 0 12px; font-size: clamp(38px, 5vw, 72px); line-height: .98; letter-spacing: -.045em; }
+    .hero-copy { max-width: 620px; color: var(--muted); font-size: 15px; line-height: 1.65; margin: 0; }
+    .frame-control { min-width: 230px; padding: 16px; }
+    .frame-control { position: relative; z-index: 10; }
+    .frame-control.liquid-glass { transform: none; }
+    .frame-control.liquid-glass.menu-open,
+    .frame-control.liquid-glass.menu-open:hover { transform: none !important; filter: none !important; transition: none; }
+    .frame-control.liquid-glass.menu-open::before,
+    .frame-control.liquid-glass.menu-open::after { animation: none; }
+    .frame-control label { display: block; color: var(--muted); font: 11px "DM Mono", monospace; text-transform: uppercase; margin-bottom: 9px; }
+    .frame-row { display: flex; gap: 8px; }
+    .frame-dropdown { position: relative; z-index: 30; flex: 1; min-width: 0; }
+    .frame-trigger { width: 100%; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--ink); background: linear-gradient(135deg, rgba(255,248,231,.14), rgba(241,184,102,.08)); border: 1px solid var(--line); border-radius: 8px; padding: 10px 11px; font: 500 12px "DM Mono", monospace; cursor: pointer; white-space: nowrap; overflow: hidden; }
+    .frame-trigger span:first-child { overflow: hidden; text-overflow: ellipsis; }
+    .frame-trigger:hover, .frame-trigger:focus-visible, .frame-trigger[aria-expanded="true"] { border-color: rgba(241,184,102,.78); color: #fff8e8; background: linear-gradient(135deg, rgba(255,248,231,.2), rgba(241,184,102,.14)); box-shadow: 0 0 0 3px rgba(241,184,102,.12), inset 0 1px 0 rgba(255,248,231,.3); outline: none; text-shadow: 0 1px 7px rgba(0,0,0,.5); }
+    .frame-chevron { width: 8px; height: 8px; flex: 0 0 8px; border-right: 1.5px solid var(--cyan); border-bottom: 1.5px solid var(--cyan); transform: rotate(45deg) translateY(-2px); transition: transform 180ms ease; }
+    .frame-trigger[aria-expanded="true"] .frame-chevron { transform: rotate(225deg) translate(-1px, -1px); }
+    .frame-menu { position: fixed; z-index: 99999; top: 0; left: 0; width: 130px; display: grid; gap: 4px; padding: 7px; border: 1px solid rgba(255,248,231,.25); border-radius: 11px; background: linear-gradient(135deg, rgba(66,58,47,.99), rgba(35,31,26,.99)); box-shadow: 0 18px 40px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,248,231,.2); backdrop-filter: blur(18px) saturate(150%); -webkit-backdrop-filter: blur(18px) saturate(150%); animation: none; opacity: 1; pointer-events: auto; }
+    .frame-menu[hidden] { display: none; }
+    .frame-option { width: 100%; border: 0; border-radius: 7px; padding: 10px 9px; color: var(--muted); background: transparent; text-align: left; font: 500 11px "DM Mono", monospace; cursor: pointer; white-space: nowrap; }
+    .frame-option:hover, .frame-option:focus-visible, .frame-option[aria-selected="true"] { color: #fff8e8; background: rgba(241,184,102,.28); text-shadow: 0 1px 7px rgba(0,0,0,.55); outline: none; }
+    .frame-row > .button { flex: 0 0 auto; position: relative; z-index: 2; min-width: 58px; color: var(--ink); background: rgba(255,248,231,.08); white-space: nowrap; overflow: visible; text-align: center; }
+    .frame-row > .button:hover { transform: none; box-shadow: 0 0 0 3px rgba(241,184,102,.1); }
+    .metric-grid { gap: 12px; margin-bottom: 30px; }
+    .metric { flex: 1; min-width: 0; padding: 17px 18px; }
+    .metric-label { color: var(--muted); font: 11px "DM Mono", monospace; text-transform: uppercase; letter-spacing: .08em; }
+    .metric-value { margin-top: 10px; font-size: 29px; font-weight: 600; letter-spacing: -.04em; }
+    .metric-value.good { color: var(--lime); } .metric-value.accent { color: var(--cyan); } .metric-value.warn { color: var(--coral); }
+    .metric-note { color: var(--muted); font-size: 12px; margin-top: 5px; }
+    .charts { gap: 12px; align-items: stretch; margin-bottom: 30px; }
+    .panel { padding: 21px; min-width: 0; }
+    .chart-large { flex: 1.5; } .chart-small { flex: 1; }
+    .section-head { justify-content: space-between; align-items: start; gap: 15px; margin-bottom: 18px; }
+    h2 { font-size: 16px; margin: 5px 0 0; letter-spacing: -.02em; }
+    .section-note { color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .chart-wrap { position: relative; height: 250px; }
+    .visual-panel { margin-bottom: 30px; }
+    .visual-stage { position: relative; height: 410px; overflow: hidden; border-radius: 10px; background: radial-gradient(circle at 50% 44%, rgba(241,184,102,.1), transparent 26%), linear-gradient(145deg, rgba(255,248,231,.04), rgba(0,0,0,.2)); }
+    #coreCanvas { display: block; width: 100%; height: 100%; }
+    .visual-overlay { position: absolute; inset: 16px; display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; }
+    .visual-kicker { color: var(--muted); font: 10px "DM Mono", monospace; letter-spacing: .12em; text-transform: uppercase; }
+    .visual-state { color: var(--lime); font: 11px "DM Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
+    .visual-legend { position: absolute; left: 16px; bottom: 14px; display: flex; gap: 14px; color: var(--muted); font: 10px "DM Mono", monospace; text-transform: uppercase; }
+    .visual-legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .legend-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+    .bottom-grid { gap: 12px; align-items: stretch; }
+    .servers-panel { flex: 1.35; } .flow-panel { flex: 1; }
+    .server-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .server { border: 1px solid var(--line); border-radius: 10px; padding: 15px; background: rgba(255,255,255,.025); }
+    .server-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 17px; }
+    .server-name { font: 500 13px "DM Mono", monospace; color: var(--cyan); }
+    .status { font: 10px "DM Mono", monospace; text-transform: uppercase; padding: 4px 7px; border-radius: 4px; color: #102017; background: var(--lime); }
+    .status.warn { background: var(--coral); }
+    .server-reading { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; margin-top: 10px; }
+    .server-reading strong { color: var(--ink); font: 500 12px "DM Mono", monospace; }
+    .bar { height: 5px; border-radius: 4px; background: rgba(255,255,255,.08); overflow: hidden; margin-top: 7px; }
+    .bar i { display: block; height: 100%; background: var(--cyan); border-radius: inherit; }
+    .bar.temp i { background: var(--coral); }
+    .flow { display: flex; flex-direction: column; gap: 9px; margin-top: 3px; }
+    .flow-step { display: flex; align-items: center; gap: 12px; }
+    .flow-node { flex: 1; padding: 11px 13px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.03); }
+    .flow-node strong { display: block; font-size: 12px; } .flow-node span { display: block; color: var(--muted); font-size: 11px; margin-top: 3px; }
+    .flow-arrow { color: var(--cyan); font: 18px "DM Mono", monospace; }
+    footer { color: var(--muted); font: 11px "DM Mono", monospace; text-align: right; margin-top: 23px; }
+    /* Adapted from the supplied LiquidGlass component for this static dashboard. */
+    .liquid-glass {
+      position: relative;
+      isolation: isolate;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.17);
+      border-radius: 14px;
+      background: var(--glass-fill);
+      box-shadow: 0 20px 55px rgba(0,0,0,.2), 0 0 30px rgba(241,184,102,.04), inset 0 1px 0 rgba(255,248,231,.24), inset 0 -1px 0 rgba(241,184,102,.14);
+      transform: translate3d(0,0,0);
+      transition: border-color 220ms var(--ease-spring), box-shadow 220ms var(--ease-spring), transform 240ms var(--ease-spring), filter 220ms var(--ease-spring);
+    }
+    .liquid-glass::before {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      inset: -.75rem;
+      background: radial-gradient(circle at 24% 16%, rgba(255,248,231,.18), transparent 32%), linear-gradient(135deg, rgba(255,248,231,.08), rgba(241,184,102,.09));
+      pointer-events: none;
+      backdrop-filter: blur(var(--glass-blur)) saturate(170%);
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(170%);
+      animation: glass-shimmer 9s ease-in-out infinite alternate;
+    }
+    .liquid-glass::after {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(138deg, rgba(255,248,231,.22), transparent 22% 68%, rgba(241,184,102,.12)), radial-gradient(circle at 82% 18%, rgba(255,248,231,.12), transparent 30%);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.07), inset 0 1rem 2.4rem rgba(255,255,255,.05), inset 0 -1.7rem 3.2rem rgba(38,139,194,.08);
+      pointer-events: none;
+      animation: edge-glow 6s ease-in-out infinite alternate;
+    }
+    .liquid-glass:hover { border-color: rgba(255,248,231,.34); box-shadow: 0 24px 60px rgba(0,0,0,.26), 0 0 24px rgba(241,184,102,.13), inset 0 1px 0 rgba(255,248,231,.3); transform: translate3d(0,-2px,0); filter: saturate(1.06); }
+    .liquid-glass:hover::before, .liquid-glass:focus-within::before { backdrop-filter: blur(var(--glass-blur)) saturate(170%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(170%); }
+    .liquid-glass:hover .metric-label, .liquid-glass:hover h2, .liquid-glass:hover .section-note, .liquid-glass:focus-within .metric-label, .liquid-glass:focus-within h2, .liquid-glass:focus-within .section-note { text-shadow: 0 1px 8px rgba(0,0,0,.5); }
+    .liquid-glass > * { position: relative; z-index: 1; }
+    @keyframes glass-shimmer { 0% { transform: scale(1) translate3d(0,0,0); opacity: .78; } 50% { transform: scale(1.04) translate3d(0,-2px,0); opacity: 1; } 100% { transform: scale(1.02) translate3d(0,2px,0); opacity: .86; } }
+    @keyframes edge-glow { 0% { opacity: .62; } 100% { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { .liquid-glass::before, .liquid-glass::after { animation: none; } .liquid-glass { transition: none; } .liquid-glass:hover { transform: none; } }
+    @media (max-width: 900px) { .hero, .charts, .bottom-grid { flex-direction: column; } .frame-control { width: 100%; } .metric-grid { display: grid; grid-template-columns: repeat(2, 1fr); } .chart-wrap { height: 220px; } }
+    @media (max-width: 560px) { .shell { width: min(100% - 28px, 1440px); padding-top: 20px; } .topbar { margin-bottom: 35px; } .top-actions .button { display: none; } h1 { font-size: 43px; } .metric-grid, .server-list { grid-template-columns: 1fr; } .metric-grid { display: grid; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <nav class="topbar">
+      <div class="brand"><div class="brand-mark"><span class="fpga-chip" aria-label="AI FPGA chip">AI</span></div><div><div class="brand-name">GreenCore</div><div class="eyebrow">AI-FPGA data center optimizer</div></div></div>
+      <div class="top-actions"><button class="button" id="playBtn">Play frames</button></div>
+    </nav>
+
+    <section class="hero">
+      <div><div class="eyebrow">Power optimization / command view</div><h1>Balance the grid<br><span style="color:var(--cyan)">before it breaks.</span></h1><p class="hero-copy">A live readout of the deterministic controller protecting three servers. Watch prediction, thermal health, redistribution, reserve capacity, and safety validation converge in one operating view.</p></div>
+      <div class="frame-control liquid-glass"><label for="frameSelect">Inspect simulation frame</label><div class="frame-row"><div class="frame-dropdown"><button class="frame-trigger" id="frameSelect" type="button" aria-haspopup="listbox" aria-expanded="false"><span>F0 · 22ns</span><span class="frame-chevron" aria-hidden="true"></span></button><div class="frame-menu" id="frameMenu" role="listbox" hidden></div></div><button class="button" id="nextBtn" title="Next simulation frame">Next</button></div></div>
+    </section>
+
+    <section class="metric-grid">
+      <div class="metric liquid-glass"><div class="metric-label">Predicted load</div><div class="metric-value accent" id="loadMetric">0 W</div><div class="metric-note" id="loadNote">Across all servers</div></div>
+      <div class="metric liquid-glass"><div class="metric-label">Reserve charge</div><div class="metric-value good" id="reserveMetric">0 W</div><div class="metric-note">Maximum capacity 10,000 W</div></div>
+      <div class="metric liquid-glass"><div class="metric-label">Redistribution</div><div class="metric-value" id="redistributionMetric">Standby</div><div class="metric-note" id="redistributionNote">No transfer requested</div></div>
+      <div class="metric liquid-glass"><div class="metric-label">Safety gate</div><div class="metric-value good" id="safetyMetric">VALID</div><div class="metric-note">All controller checks passed</div></div>
+    </section>
+
+    <section class="panel liquid-glass visual-panel">
+      <div class="section-head"><div><div class="eyebrow">Spatial control map</div><h2>Three-server energy core</h2></div><div class="section-note">Drag to inspect · selected frame</div></div>
+      <div class="visual-stage" id="visualStage">
+        <canvas id="coreCanvas" aria-label="3D visualization of the three-server power controller"></canvas>
+        <div class="visual-overlay"><span class="visual-kicker" id="visualFrame">FRAME 0 / 22 NS</span><span class="visual-state" id="visualState">SYSTEM VALID</span></div>
+        <div class="visual-legend"><span><i class="legend-dot" style="background:#f1b866"></i>load</span><span><i class="legend-dot" style="background:#b8d58f"></i>healthy</span><span><i class="legend-dot" style="background:#ed846d"></i>thermal risk</span><span><i class="legend-dot" style="background:#ffb09c"></i>transfer flow</span></div>
+      </div>
+    </section>
+
+    <section class="charts">
+      <article class="panel liquid-glass chart-large"><div class="section-head"><div><div class="eyebrow">Load profile</div><h2>Current vs predicted power</h2></div><div class="section-note">Watts · all frames</div></div><div class="chart-wrap"><canvas id="powerChart"></canvas></div></article>
+      <article class="panel liquid-glass chart-small"><div class="section-head"><div><div class="eyebrow">Thermal envelope</div><h2>Temperature response</h2></div><div class="section-note">°C · selected frame</div></div><div class="chart-wrap"><canvas id="tempChart"></canvas></div></article>
+      <article class="panel liquid-glass chart-small"><div class="section-head"><div><div class="eyebrow">Reserve state</div><h2>Charge trajectory</h2></div><div class="section-note">W · all frames</div></div><div class="chart-wrap"><canvas id="reserveChart"></canvas></div></article>
+    </section>
+
+    <section class="bottom-grid">
+      <article class="panel liquid-glass servers-panel"><div class="section-head"><div><div class="eyebrow">Server telemetry</div><h2>Health and allocation</h2></div><div class="section-note" id="frameLabel">Frame 0 · 22 ns</div></div><div class="server-list" id="serverList"></div></article>
+      <article class="panel liquid-glass flow-panel"><div class="section-head"><div><div class="eyebrow">Decision path</div><h2>Controller sequence</h2></div></div><div class="flow"><div class="flow-step"><div class="flow-node"><strong>01 · Analyze</strong><span>Power zones and thermal signals</span></div><div class="flow-arrow">↓</div></div><div class="flow-step"><div class="flow-node"><strong>02 · Protect</strong><span>Health and maintenance eligibility</span></div><div class="flow-arrow">↓</div></div><div class="flow-step"><div class="flow-node"><strong>03 · Balance</strong><span>Source, receiver, transfer amount</span></div><div class="flow-arrow">↓</div></div><div class="flow-step"><div class="flow-node"><strong>04 · Validate</strong><span>Reserve, allocation, safety gate</span></div></div></div></article>
+    </section>
+    <footer>GREENCORE / AI-FPGA POWER + THERMAL OPTIMIZER / DATA CENTER SIMULATION</footer>
+  </main>
+
+  <script>
+    const fallback = [
+      {frame:0,time:22,current_s1:150,pred_s1:160,current_s2:260,pred_s2:270,current_s3:370,pred_s3:380,alloc_s1:15,alloc_s2:15,alloc_s3:15,source:0,receiver:1,redist_enable:0,redist_amount:0,pred_temp_s1:45,pred_temp_s2:44,pred_temp_s3:46,eff_temp_s1:45,eff_temp_s2:44,eff_temp_s3:46,reserve_charge:9970,final_valid:1},
+      {frame:1,time:32,current_s1:790,pred_s1:870,current_s2:260,pred_s2:270,current_s3:320,pred_s3:330,alloc_s1:30,alloc_s2:30,alloc_s3:30,source:1,receiver:2,redist_enable:1,redist_amount:120,pred_temp_s1:76,pred_temp_s2:55,pred_temp_s3:58,eff_temp_s1:76,eff_temp_s2:55,eff_temp_s3:58,reserve_charge:9940,final_valid:1},
+      {frame:2,time:42,current_s1:675,pred_s1:705,current_s2:350,pred_s2:360,current_s3:210,pred_s3:220,alloc_s1:45,alloc_s2:45,alloc_s3:45,source:1,receiver:3,redist_enable:0,redist_amount:0,pred_temp_s1:90,pred_temp_s2:80,pred_temp_s3:62,eff_temp_s1:90,eff_temp_s2:80,eff_temp_s3:62,reserve_charge:9910,final_valid:1}
+    ];
+    let rows = fallback, selected = 0, playing = false, timer;
+    const colors = ['#f1b866','#b8d58f','#ed846d'];
+    const parse = text => { const [head,...body] = text.trim().split(/\r?\n/); const keys = head.split(','); return body.map(line => Object.fromEntries(line.split(',').map((v,i)=>[keys[i], Number.isNaN(Number(v)) ? v : Number(v)]))); };
+    fetch('../simulation/output/system_results.csv').then(r => r.ok ? r.text() : Promise.reject()).then(text => { const data = parse(text); if (data.length) { rows = data; buildSelector(); render(); } }).catch(() => {});
+    const chartDefaults = {responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{color:'#8d9bb5',font:{family:'DM Mono',size:10},boxWidth:10}}}, scales:{x:{grid:{color:'rgba(150,174,215,.08)'},ticks:{color:'#8d9bb5',font:{family:'DM Mono',size:10}}},y:{grid:{color:'rgba(150,174,215,.08)'},ticks:{color:'#8d9bb5',font:{family:'DM Mono',size:10}}}}};
+    let powerChart, tempChart, reserveChart;
+    let coreScene, coreCamera, coreRenderer, coreGroup, coreNodes = [], coreBeam, coreArrow, coreParticles = [], coreLinks, coreFrame = 0, transferStart, transferEnd, flowSource, flowReceiver;
+    function chart(id, config) { return new Chart(document.getElementById(id), config); }
+    function initCore() {
+      const canvas = document.getElementById('coreCanvas');
+      coreScene = new THREE.Scene();
+      coreCamera = new THREE.PerspectiveCamera(34, 1, .1, 100);
+      coreCamera.position.set(0, 4.4, 8.8);
+      coreCamera.lookAt(0, .15, 0);
+      coreRenderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
+      coreRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      coreRenderer.setClearColor(0x000000, 0);
+      coreScene.add(new THREE.AmbientLight(0xfff1d0, 1.8));
+      const key = new THREE.PointLight(0xf1b866, 18, 16); key.position.set(0, 4, 3); coreScene.add(key);
+      coreGroup = new THREE.Group(); coreScene.add(coreGroup);
+      const floor = new THREE.Mesh(new THREE.CircleGeometry(4.8, 64), new THREE.MeshBasicMaterial({color:0xf1b866, transparent:true, opacity:.035, side:THREE.DoubleSide}));
+      floor.rotation.x = -Math.PI / 2; floor.position.y = -1.2; coreGroup.add(floor);
+      const core = new THREE.Mesh(new THREE.IcosahedronGeometry(1.05, 2), new THREE.MeshPhysicalMaterial({color:0xf1b866, emissive:0x6e3f18, emissiveIntensity:1.2, metalness:.42, roughness:.2, transparent:true, opacity:.86}));
+      core.position.y = .25; coreGroup.add(core); coreGroup.userData.core = core;
+      const halo = new THREE.Mesh(new THREE.SphereGeometry(1.45, 32, 32), new THREE.MeshBasicMaterial({color:0xf1b866, transparent:true, opacity:.055}));
+      halo.position.copy(core.position); coreGroup.add(halo);
+      const coreLabel = makeLabel('AI-FPGA CORE', 'controller'); coreLabel.position.set(0, 1.75, 0); coreLabel.scale.set(1.35, .42, 1); coreGroup.add(coreLabel);
+      const linkPoints = [];
+      ['S1','S2','S3'].forEach((name, i) => { const angle = i * Math.PI * 2 / 3 - Math.PI / 2; linkPoints.push(new THREE.Vector3(Math.cos(angle) * 3.15, -.58, Math.sin(angle) * 3.15)); });
+      linkPoints.push(linkPoints[0].clone());
+      coreLinks = new THREE.Line(new THREE.BufferGeometry().setFromPoints(linkPoints), new THREE.LineBasicMaterial({color:0xf1b866, transparent:true, opacity:.25})); coreGroup.add(coreLinks);
+      ['S1','S2','S3'].forEach((name, i) => {
+        const angle = i * Math.PI * 2 / 3 - Math.PI / 2;
+        const node = new THREE.Group(); node.position.set(Math.cos(angle) * 3.15, .1, Math.sin(angle) * 3.15);
+        const body = new THREE.Mesh(new THREE.BoxGeometry(1.05, 1.55, .78), new THREE.MeshPhysicalMaterial({color:0x252824, emissive:0x151812, emissiveIntensity:.5, metalness:.72, roughness:.3}));
+        body.position.y = .12; node.add(body);
+        const rackBars = [];
+        for (let barIndex = 0; barIndex < 6; barIndex += 1) { const bar = new THREE.Mesh(new THREE.BoxGeometry(.72, .055, .025), new THREE.MeshBasicMaterial({color:0x8e987d, transparent:true, opacity:.72})); bar.position.set(0, -.42 + barIndex*.19, .405); node.add(bar); rackBars.push(bar); }
+        const edge = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.08, 1.58, .81)), new THREE.LineBasicMaterial({color:0xf1b866, transparent:true, opacity:.28})); edge.position.y = .12; node.add(edge);
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(.83, .045, 10, 48), new THREE.MeshBasicMaterial({color:0xf1b866, transparent:true, opacity:.85}));
+        ring.rotation.x = Math.PI / 2; ring.position.y = -.61; node.add(ring);
+        const label = makeLabel(name); label.position.set(0, 1.02, 0); node.add(label);
+        const dataLabel = makeLabel('0 W', '0 C'); dataLabel.position.set(0, 1.65, 0); dataLabel.scale.set(1.3, .5, 1); node.add(dataLabel);
+        node.userData = {body, ring, dataLabel, rackBars, angle}; coreGroup.add(node); coreNodes.push(node);
+      });
+      coreBeam = new THREE.Mesh(new THREE.CylinderGeometry(.055, .055, 1, 12), new THREE.MeshBasicMaterial({color:0xed846d, transparent:true, opacity:.9}));
+      coreBeam.visible = false; coreScene.add(coreBeam);
+      coreArrow = new THREE.Mesh(new THREE.ConeGeometry(.16, .42, 16), new THREE.MeshBasicMaterial({color:0xffb09c, transparent:true, opacity:.98})); coreArrow.visible = false; coreScene.add(coreArrow);
+      for (let particleIndex = 0; particleIndex < 4; particleIndex += 1) { const particle = new THREE.Mesh(new THREE.SphereGeometry(.09, 12, 12), new THREE.MeshBasicMaterial({color:0xffd0be, transparent:true, opacity:.95})); particle.visible = false; coreScene.add(particle); coreParticles.push(particle); }
+      resizeCore(); window.addEventListener('resize', resizeCore);
+      let dragging = false, lastX = 0;
+      canvas.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; canvas.setPointerCapture(e.pointerId); });
+      canvas.addEventListener('pointermove', e => { if (dragging) { coreGroup.rotation.y += (e.clientX-lastX)*.008; lastX=e.clientX; } });
+      canvas.addEventListener('pointerup', () => { dragging = false; });
+      animateCore();
+    }
+    function makeLabel(text, sub = '') {
+      const labelCanvas = document.createElement('canvas'); labelCanvas.width = 512; labelCanvas.height = 144;
+      const texture = new THREE.CanvasTexture(labelCanvas);
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({map:texture, transparent:true, depthTest:false})); sprite.scale.set(.95,.28,1);
+      sprite.userData.update = (nextText, nextSub = '') => { const ctx = labelCanvas.getContext('2d'); ctx.clearRect(0,0,512,144); ctx.fillStyle='rgba(18,19,17,.84)'; ctx.strokeStyle='rgba(241,184,102,.62)'; ctx.lineWidth=3; ctx.beginPath(); ctx.roundRect(8,8,496,128,16); ctx.fill(); ctx.stroke(); ctx.textAlign='center'; ctx.font='700 34px monospace'; ctx.fillStyle='#fff8e8'; ctx.fillText(nextText,256,59); if (nextSub) { ctx.font='500 23px monospace'; ctx.fillStyle='#d9cdb9'; ctx.fillText(nextSub,256,101); } texture.needsUpdate=true; };
+      sprite.userData.update(text, sub); return sprite;
+    }
+    function resizeCore() { const stage = document.getElementById('visualStage'); const w=stage.clientWidth, h=stage.clientHeight; coreRenderer.setSize(w,h,false); coreCamera.aspect=w/h; coreCamera.updateProjectionMatrix(); }
+    function pointBeam(a, b) { flowSource=a; flowReceiver=b; const start = a.getWorldPosition(new THREE.Vector3()), end = b.getWorldPosition(new THREE.Vector3()), delta = end.clone().sub(start), direction = delta.clone().normalize(); transferStart=start; transferEnd=end; coreBeam.position.copy(start).add(end).multiplyScalar(.5); coreBeam.scale.y = delta.length(); coreBeam.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), direction); coreArrow.position.copy(end); coreArrow.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), direction); coreBeam.visible = true; coreArrow.visible = true; coreParticles.forEach(particle => { particle.visible=true; }); }
+    function updateCore(r) {
+      coreFrame = r.frame; document.getElementById('visualFrame').textContent = `FRAME ${r.frame} / ${r.time} NS`; document.getElementById('visualState').textContent = r.final_valid ? 'SYSTEM VALID' : 'SAFETY BLOCKED'; document.getElementById('visualState').style.color = r.final_valid ? 'var(--lime)' : 'var(--coral)';
+      coreNodes.forEach((node, i) => { const s=['s1','s2','s3'][i], power=r['pred_'+s], temp=r['eff_temp_'+s], hot=temp>=85; const strength=Math.max(.55, Math.min(1.8, power/500)); node.userData.body.scale.y = strength; node.userData.body.position.y = -.68 + .8 * strength; node.userData.body.material.color.set(0x252824); node.userData.body.material.emissive.set(hot ? 0x632b20 : 0x151812); node.userData.rackBars.forEach(bar => bar.material.color.set(hot ? 0xed846d : 0xf1b866)); node.userData.ring.material.color.set(hot ? 0xed846d : 0xf1b866); node.userData.ring.scale.setScalar(.8+strength*.16); node.userData.dataLabel.userData.update(`${power} W`, `${temp} C`); });
+      coreGroup.userData.core.material.emissiveIntensity = r.redist_enable ? 1.8 : 1.2;
+      if (r.redist_enable && r.source && r.receiver) pointBeam(coreNodes[r.source-1], coreNodes[r.receiver-1]); else { flowSource=null; flowReceiver=null; coreBeam.visible = false; coreArrow.visible = false; coreParticles.forEach(particle => { particle.visible=false; }); }
+    }
+    function animateCore() { requestAnimationFrame(animateCore); if (!coreRenderer) return; coreGroup.userData.core.rotation.y += .004; coreGroup.userData.core.rotation.x += .002; coreNodes.forEach((node,i) => { node.rotation.y += .006*(i%2 ? -1 : 1); }); if (coreBeam.visible && flowSource && flowReceiver) { pointBeam(flowSource, flowReceiver); const pulse=performance.now()*.003; coreBeam.material.opacity = .62 + Math.sin(pulse*2)*.28; const delta=transferEnd.clone().sub(transferStart); coreParticles.forEach((particle,i) => { const progress=((pulse*.18 + i*.22)%1 + 1)%1; particle.position.copy(transferStart).add(delta.clone().multiplyScalar(progress)); }); } coreRenderer.render(coreScene, coreCamera); }
+    function buildCharts() {
+      powerChart = chart('powerChart',{type:'line',data:{labels:rows.map(r=>'F'+r.frame),datasets:[...['s1','s2','s3'].map((s,i)=>({label:s.toUpperCase()+' predicted',data:rows.map(r=>r['pred_'+s]),borderColor:colors[i],backgroundColor:colors[i]+'22',tension:.35,pointRadius:3,fill:false})),...['s1','s2','s3'].map((s,i)=>({label:s.toUpperCase()+' current',data:rows.map(r=>r['current_'+s]),borderColor:colors[i]+'88',borderDash:[4,4],tension:.35,pointRadius:2,fill:false}))]},options:chartDefaults});
+      tempChart = chart('tempChart',{type:'bar',data:{labels:['S1','S2','S3'],datasets:[{label:'Predicted',data:[],backgroundColor:'#ff8b7888',borderRadius:4},{label:'Effective',data:[],backgroundColor:'#a895ffcc',borderRadius:4}]},options:{...chartDefaults,scales:{...chartDefaults.scales,y:{...chartDefaults.scales.y,suggestedMax:100}}}});
+      reserveChart = chart('reserveChart',{type:'line',data:{labels:rows.map(r=>'F'+r.frame),datasets:[{label:'Reserve charge',data:rows.map(r=>r.reserve_charge),borderColor:'#b8e36b',backgroundColor:'#b8e36b22',fill:true,tension:.35,pointRadius:3}]},options:chartDefaults});
+    }
+    function buildSelector() { const trigger = document.getElementById('frameSelect'), menu = document.getElementById('frameMenu'); trigger.querySelector('span').textContent = `F${rows[selected].frame} · ${rows[selected].time}ns`; menu.innerHTML = rows.map((r,i)=>`<button class="frame-option" type="button" role="option" aria-selected="${i === selected}" data-index="${i}">Frame ${r.frame} · ${r.time} ns</button>`).join(''); }
+    function positionFrameMenu() { const trigger=document.getElementById('frameSelect'), menu=document.getElementById('frameMenu'), rect=trigger.getBoundingClientRect(); menu.style.left=`${rect.left}px`; menu.style.top=`${rect.bottom + 8}px`; menu.style.width=`${rect.width}px`; }
+    function closeFrameMenu() { const trigger=document.getElementById('frameSelect'), menu=document.getElementById('frameMenu'), control=document.querySelector('.frame-control'); trigger.setAttribute('aria-expanded','false'); menu.hidden=true; control.classList.remove('menu-open'); }
+    function render() {
+      const r = rows[selected];
+      document.getElementById('loadMetric').textContent = `${r.pred_s1+r.pred_s2+r.pred_s3} W`;
+      document.getElementById('loadNote').textContent = `S1 ${r.pred_s1} · S2 ${r.pred_s2} · S3 ${r.pred_s3}`;
+      document.getElementById('reserveMetric').textContent = `${r.reserve_charge.toLocaleString()} W`;
+      document.getElementById('redistributionMetric').textContent = r.redist_enable ? `${r.redist_amount} W transfer` : 'Standby';
+      document.getElementById('redistributionMetric').className = `metric-value ${r.redist_enable ? 'warn' : ''}`;
+      document.getElementById('redistributionNote').textContent = r.redist_enable ? `S${r.source} → S${r.receiver}` : 'No transfer requested';
+      document.getElementById('safetyMetric').textContent = r.final_valid ? 'VALID' : 'BLOCKED';
+      document.getElementById('safetyMetric').className = `metric-value ${r.final_valid ? 'good' : 'warn'}`;
+      document.getElementById('frameLabel').textContent = `Frame ${r.frame} · ${r.time} ns`;
+      updateCore(r);
+      tempChart.data.datasets[0].data = [r.pred_temp_s1,r.pred_temp_s2,r.pred_temp_s3]; tempChart.data.datasets[1].data = [r.eff_temp_s1,r.eff_temp_s2,r.eff_temp_s3]; tempChart.update();
+      document.getElementById('serverList').innerHTML = ['s1','s2','s3'].map((s,i) => { const temp=r['eff_temp_'+s], hot=temp>=85; return `<div class="server"><div class="server-head"><span class="server-name">SERVER ${s.toUpperCase()}</span><span class="status ${hot?'warn':''}">${hot?'critical':'healthy'}</span></div><div class="server-reading"><span>Predicted power</span><strong>${r['pred_'+s]} W</strong></div><div class="bar"><i style="width:${Math.min(100,r['pred_'+s]/10)}%"></i></div><div class="server-reading"><span>Allocation</span><strong>${r['alloc_'+s]} W</strong></div><div class="server-reading"><span>Temperature</span><strong>${temp} °C</strong></div><div class="bar temp"><i style="width:${Math.min(100,temp)}%"></i></div></div>`; }).join('');
+    }
+    document.getElementById('frameSelect').addEventListener('click', e => { e.stopPropagation(); const trigger=document.getElementById('frameSelect'), menu=document.getElementById('frameMenu'), control=document.querySelector('.frame-control'), open=trigger.getAttribute('aria-expanded') === 'true'; trigger.setAttribute('aria-expanded', String(!open)); menu.hidden=open; control.classList.toggle('menu-open', !open); if (!open) positionFrameMenu(); });
+    document.querySelector('.frame-dropdown').addEventListener('click', e => e.stopPropagation());
+    document.getElementById('frameMenu').addEventListener('click', e => { e.stopPropagation(); const option=e.target.closest('.frame-option'); if (!option) return; selected=Number(option.dataset.index); buildSelector(); closeFrameMenu(); render(); });
+    window.addEventListener('resize', () => { if (document.getElementById('frameSelect').getAttribute('aria-expanded') === 'true') positionFrameMenu(); });
+    window.addEventListener('scroll', () => { if (document.getElementById('frameSelect').getAttribute('aria-expanded') === 'true') positionFrameMenu(); }, {passive:true});
+    document.addEventListener('click', e => { if (!e.target.closest('.frame-dropdown')) closeFrameMenu(); });
+    document.getElementById('nextBtn').addEventListener('click', () => { selected=(selected+1)%rows.length; buildSelector(); render(); });
+    document.getElementById('playBtn').addEventListener('click', e => { playing=!playing; e.target.textContent=playing?'Pause frames':'Play frames'; if(playing) timer=setInterval(()=>document.getElementById('nextBtn').click(),1800); else clearInterval(timer); });
+    buildSelector(); buildCharts(); initCore(); render();
+  </script>
+</body>
+</html>

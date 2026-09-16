@@ -1,0 +1,14 @@
+# Python and notebook-generated local files
+__pycache__/
+.ipynb_checkpoints/
+*.py[cod]
+
+# Verilog build and waveform artifacts
+simulation/output/*.vvp
+simulation/output/*.vcd
+
+# Editor and OS metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
