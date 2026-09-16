@@ -54,4 +54,12 @@ The checked-in CSV contains three scenarios at 22 ns, 32 ns, and 42 ns. The curr
 
 ## Notebook analysis
 
-Open either notebook in VS Code or Jupyter after selecting a Python environment with the packages imported by that notebook. The notebooks are analysis surfaces; the Verilog testbench is the source of truth for the generated controller behavior shown in the dashboard.
+Open either notebook in VS Code or Jupyter after selecting a Python environment with the packages imported by that notebook. `Copy_of_datacenter_power_forecasting.ipynb` expects three source files in `data/`:
+
+- `server1.csv` or `server1.xlsx`
+- `server2.csv` or `server2.xlsx`
+- `server3.csv` or `server3.xlsx`
+
+Each file must contain `ts`, `cooling_kw`, `hvac_kw`, `it_power_kw`, and `pump_kw` columns. The notebook also works in Colab when those files are placed in `/content/drive/MyDrive/SIH`. The repository currently does not include these private source datasets, so the forecasting notebook cannot complete until they are supplied. Its loader now reports this requirement directly.
+
+The notebooks are analysis surfaces; the Verilog testbench is the source of truth for the generated controller behavior shown in the dashboard.
