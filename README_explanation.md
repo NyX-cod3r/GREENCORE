@@ -129,4 +129,4 @@ The forecast output is written to `predictions.txt` and `predictions_with_timest
 
 ## Short summary
 
-GreenCore is a deterministic, hardware-style controller for three data-center servers. It analyzes predicted power, checks temperature and maintenance health, balances load when safe, uses backup capacity when necessary, and reports whether the final action passed its safety checks. A separate Python notebook provides future power forecasts that can be used as an input source after the project's current manual conversion step.
+GreenCore is a deterministic, hardware-style controller . It analyzes predicted power, checks temperature and maintenance health, balances load when safe, uses backup capacity when necessary, and reports whether the final action passed its safety checks. A separate Python notebook provides future power forecasts that can be used as an input source after the project's current manual conversion step.
